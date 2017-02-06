@@ -26,11 +26,20 @@ if len(r) != 1:
     sys.exit(1)
 
 # validate the settings in the config file
-if not conf.getboolean("config", "hisat2") and not conf.getboolean("config", "tophat2"):
-    print("Please enable either hisat2 or tophat2 in the config file")
+if not conf.getboolean("config", "hisat2") and not conf.getboolean("config", "tophat2") and not conf.getboolean("config", "star"):
+    print("Please enable either hisat2 or tophat2 or star in the config file")
     sys.exit(1)
-if conf.getboolean("config", "hisat2") and conf.getboolean("config", "tophat2"):
+if conf.getboolean("config", "hisat2") and conf.getboolean("config", "tophat2") and conf.getboolean("config", "star"):
+    print("Please enable only one of hisat2 or tophat2 or star in the config file")
+    sys.exit(1)
+if conf.getboolean("config", "hisat2") and conf.getboolean("config", "tophat2") and not conf.getboolean("config", "star"):
     print("Please enable only one of hisat2 and tophat2 in the config file")
+    sys.exit(1)
+if conf.getboolean("config", "hisat2") and not conf.getboolean("config", "tophat2") and conf.getboolean("config", "star"):
+    print("Please enable only one of hisat2 and star in the config file")
+    sys.exit(1)
+if not conf.getboolean("config", "hisat2") and conf.getboolean("config", "tophat2") and conf.getboolean("config", "star"):
+    print("Please enable only one of tophat2 and star in the config file")
     sys.exit(1)
 if not conf.getboolean("config", "stringtie") and not conf.getboolean("config", "cufflinks"):
     print("Please enable either stringtie or cufflinks in the config file")
@@ -42,10 +51,15 @@ if conf.getboolean("config", "stringtie") and conf.getboolean("config", "cufflin
 # making sure the user specified a reference set
 print("\nAdding reference files ...")
 count = 0
-for fname in os.listdir(base_dir + "/reference/"):
-    if re.search("^" + conf.get("reference", "reference_prefix"), fname):
-        print("    " + fname)
-        count += 1
+
+for fname in os.listdir(base_dir + "/reference/star_index/"):
+#    if re.search("^" + conf.get("reference", "reference_prefix"), fname):
+#        print("    " + fname)
+#        count += 1
+#    if re.search("^" + conf.get("reference","reference_path"), fname):
+	print("    " + fname)
+	count += 1
+
 if count == 0:
     print("ERROR: Unable to find reference files in the reference/ directory" +
           " with the specified prefix: " + conf.get("reference", "reference_prefix"))

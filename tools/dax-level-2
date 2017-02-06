@@ -51,24 +51,19 @@ def add_task_files(task_files, dax, job, task_name):
         job.uses(f, link=Link.INPUT)
 
 
-def add_ref_files(dax, job, ref_prefix):
+def add_ref_files(dax, job):
     """
     add a set of reference input files
     """
     global ref_files
-    if ref_prefix not in ref_files:
-        ref_files[ref_prefix] = {}
     # add to DAX-level replica catalog
-    for fname in os.listdir(base_dir + "/reference/"):
-        if (not re.search("^" + ref_prefix, fname)) or (re.search("\.gff3$", fname)):
-            # skip non-matching files
-            continue
-        if fname not in ref_files[ref_prefix]:
-            ref_files[ref_prefix][fname] = File(fname)
-            ref_files[ref_prefix][fname].addPFN( \
-                PFN("file://" + base_dir + "/reference/" + fname, "local"))
-            dax.addFile(ref_files[ref_prefix][fname])
-    for f in ref_files[ref_prefix]:
+    for fname in os.listdir(base_dir + "/reference/star_index/"):
+        if fname not in ref_files:
+            ref_files[fname] = File(fname)
+            ref_files[fname].addPFN( \
+                PFN("file://" + base_dir + "/reference/star_index/" + fname, "local"))
+            dax.addFile(ref_files[fname])
+    for f in ref_files:
         job.uses(f, link=Link.INPUT)
 
 
@@ -95,18 +90,17 @@ def add_gff3_file(dax, job):
     return rf
 
 
-def hisat2(task_files, dax, base_name, part, common_part, forward_file):
-
+def star(task_files, dax, base_name, part, common_part, forward_file):
     # Add job
-    j = Job(name="hisat2")
+    j = Job(name="star")
     j.addArguments(getpass.getuser(), \
                    run_id, \
-                   conf.get("reference", "reference_prefix"), \
+                   conf.get("reference", "reference_path"), \
                    base_name, \
                    part, \
                    common_part)
-    add_task_files(task_files, dax, j, "hisat2")
-    add_ref_files(dax, j, conf.get("reference", "reference_prefix"))
+    add_task_files(task_files, dax, j, "star")
+    add_ref_files(dax, j)
     j.uses(forward_file, link=Link.INPUT)
     # output files
     f1 = File(base_name + "-" + common_part + "-accepted_hits.bam")
@@ -120,34 +114,6 @@ def hisat2(task_files, dax, base_name, part, common_part, forward_file):
     dax.addJob(j)
 
     return f1
-
-
-def tophat(task_files, dax, base_name, part, common_part, forward_file):
-
-    # Add job
-    j = Job(name="tophat")
-    j.addArguments(getpass.getuser(), \
-                   run_id, \
-                   conf.get("reference", "reference_prefix"), \
-                   base_name, \
-                   part, \
-                   common_part)
-    add_task_files(task_files, dax, j, "tophat")
-    add_ref_files(dax, j, conf.get("reference", "reference_prefix"))
-    j.uses(forward_file, link=Link.INPUT)
-    # output files
-    f1 = File(base_name + "-" + common_part + "-accepted_hits.bam")
-    j.uses(f1, link=Link.OUTPUT, transfer=False)
-    f2 = File(base_name + "-" + common_part + "-align_summary.txt")
-    j.uses(f2, link=Link.OUTPUT, transfer=True)
-    f3 = File(base_name + "-" + common_part + "-out.txt")
-    j.uses(f3, link=Link.OUTPUT, transfer=True)
-    f4 = File(base_name + "-" + common_part + "-trimmomatic.txt")
-    j.uses(f4, link=Link.OUTPUT, transfer=True)
-    dax.addJob(j)
-
-    return f1
-
 
 def merge(dax, base_name, in_list):
 
@@ -229,7 +195,7 @@ def main():
     for exe_name in os.listdir(base_dir + "/tools/"):
         exe = Executable(name=exe_name, arch="x86_64", installed=False)
         exe.addPFN(PFN("file://" + base_dir + "/tools/" + exe_name, "local"))
-        if exe_name == "tophat" or exe_name == "hisat2":
+        if exe_name == "star":
             exe.addProfile(Profile(Namespace.PEGASUS, "clusters.size", 5))
         exe.addProfile(Profile(Namespace.CONDOR, "request_memory", memory))
         dax.addExecutable(exe)
@@ -273,11 +239,8 @@ def main():
                 for_file.addPFN(PFN(base_url + "/" + base_name + "-forward-" + common_part, site_name))
                 dax.addFile(for_file)
                 
-           
-                if conf.getboolean("config", "hisat2"):
-                    out_file = hisat2(task_files, dax, base_name, part, common_part, for_file)
-                else:
-                    out_file = tophat(task_files, dax, base_name, part, common_part, for_file)
+                if conf.getboolean("config", "star"):
+		    out_file = star(task_files, dax, base_name, part, common_part, for_file)
                 accepted_hits.append(out_file)
         
             # merge
@@ -298,7 +261,6 @@ def main():
         else:
             # StringTie
             stringtie(task_files, dax, base_name, merged)
-
 
     # merge all the fpkms
     j = Job(name="gem-merge")

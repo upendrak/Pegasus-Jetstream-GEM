@@ -1,0 +1,64 @@
+#!/bin/bash
+
+# module init required when running on non-OSG resources, and has to sourced
+# before set -e as sometimes it exits non-0 when a module environment is 
+# already set up
+. /cvmfs/oasis.opensciencegrid.org/osg/sw/module-init.sh
+
+set -e
+
+module load samtools/1.3.1
+module load java/8u25
+
+set -v
+set -o pipefail
+
+CONNECT_USER=$1
+RUN_ID=$2
+REF_PATH=$3
+BASE_NAME=$4
+PART=$5
+COMMON_NAME=$6
+
+# make sure we have empty output files in case of errors
+touch $BASE_NAME-$COMMON_NAME-out.txt
+touch $BASE_NAME-$COMMON_NAME-accepted_hits.bam
+
+java -Xmx512m \
+     -jar trimmomatic-0.36.jar SE -threads 1 -phred33 \
+     $BASE_NAME-forward-$COMMON_NAME  \
+     left_result.paired_trim.forward_$COMMON_NAME.fastq \
+     ILLUMINACLIP:fasta_adapter.txt:2:40:15 LEADING:3 TRAILING:6 SLIDINGWINDOW:4:15 MINLEN:50 \
+     2>&1 | tee $BASE_NAME-$COMMON_NAME-trimmomatic.txt
+
+# empty outputs?
+LEFT_SIZE=`ls -l left_result.paired_trim.forward_$COMMON_NAME.fastq | cut -d ' ' -f 5`
+if [ $LEFT_SIZE -o 50 ]; then
+    echo "Warning: trimmomatic output was 0 sequences"
+    touch $BASE_NAME-$COMMON_NAME-accepted_hits.bam
+    exit 0
+fi
+
+#unzip hisat2-2.0.4-Linux_x86_64.zip
+unzip 2.5.2b.zip
+
+#hisat2-2.0.4/hisat2 --no-temp-splicesite --known-splicesite-infile ./$REF_PREFIX.Splice_Sites.txt -x ./$REF_PREFIX -U left_result.paired_trim.forward_$COMMON_NAME.fastq -S $BASE_NAME-$COMMON_NAME.hits.sam -t --dta-cufflinks 2>&1 | tee $BASE_NAME-$COMMON_NAME-out.txt
+
+STAR-2.5.2b/bin/Linux_x86_64_static/STAR --genomeDir ./$REF_PATH --runThreadN 2 \
+					 --outSAMtype BAM SortedByCoordinate \
+					 --readFilesIn left_result.paired_trim.forward_$COMMON_NAME.fastq | tee $BASE_NAME-$COMMON_NAME-out.txt
+
+
+# we only need the accepted hits, but it needs a unique name
+#mv $BASE_NAME-$COMMON_NAME.hits.sam $BASE_NAME-$COMMON_NAME-accepted_hits.sam
+
+# Convert to sorted bam file
+
+#samtools view -Su $COMMON_NAME-accepted_hits.sam | samtools sort - $COMMON_NAME-accepted_hits.sorted
+
+#samtools view -bS $BASE_NAME-$COMMON_NAME-accepted_hits.sam > $BASE_NAME-$COMMON_NAME-accepted_hits.view
+#samtools sort -o $BASE_NAME-$COMMON_NAME-accepted_hits.view.sorted $BASE_NAME-$COMMON_NAME-accepted_hits.view
+
+mv $BASE_NAME-$COMMON_NAME-Aligned.sortedByCoord.out.bam $BASE_NAME-$COMMON_NAME-accepted_hits.bam
+#mv Aligned.sortedByCoord.out.bam $BASE_NAME-$COMMON_NAME-accepted_hits.bam
+
